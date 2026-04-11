@@ -8,7 +8,7 @@ import time
 import numpy as np
 import torch
 import easyocr
-import google.generativeai as genai
+from google import genai
 from groq import Groq
 from duckduckgo_search import DDGS
 from fpdf import FPDF
@@ -120,13 +120,15 @@ def extract_json(text: str) -> dict:
         return {}
 
 def analyze_image_with_gemini(image: Image.Image) -> dict:
-    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
     prompt = """Bu görüntüde bir ilaç kutusu/ambalajı var. Lütfen şunları çıkar ve JSON formatında döndür:
     { "ilac_adi": "İlacın tam adı", "etken_madde": "Etken madde(ler)", "firma": "Üretici firma", "doz": "Dozaj", "form": "Tablet/Şurup vb.", "tum_metin": "Okunan tüm metin" }
     Sadece JSON döndür, açıklama ekleme."""
     try:
-        response = model.generate_content([prompt, image])
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=[prompt, image]
+        )
         return extract_json(response.text.strip())
     except Exception as e:
         return {"hata": str(e), "tum_metin": ""}
@@ -169,7 +171,7 @@ def generate_pdf_report(drug_name: str, analysis_text: str) -> bytes:
     pdf.set_font("Helvetica", "", 12)
     clean_text = analysis_text.replace("#", "").replace("*", "")
     pdf.multi_cell(0, 7, clean_text.encode('latin-1', 'replace').decode('latin-1'))
-    return pdf.output(dest="S")
+    return bytes(pdf.output())
 
 # ── UI MANTIĞI ─────────────────────────────────────────────────────────────
 
@@ -185,7 +187,7 @@ image = None
 if image_source:
     image = Image.open(io.BytesIO(image_source.getvalue()))
     image = preprocess_image(image)
-    st.image(image, caption="Yüklenen Görsel", use_container_width=True)
+    st.image(image, caption="Yüklenen Görsel", width="stretch")
 
 with st.expander("✍️ Manuel Giriş"):
     manual_drug = st.text_input("İlaç adı girin", key="manual_input")
@@ -194,7 +196,7 @@ with st.expander("✍️ Manuel Giriş"):
 if "analysis_result" not in st.session_state:
     st.session_state.analysis_result = None
 
-analyze_btn = st.button("🔍 Analiz Et", type="primary", use_container_width=True, disabled=(image is None and not manual_drug), key="main_analyze_btn")
+analyze_btn = st.button("🔍 Analiz Et", type="primary", disabled=(image is None and not manual_drug), key="main_analyze_btn")
 
 # İşlem Alanı (Stabil React DOM için st.empty kullanıldı)
 status_placeholder = st.empty()
