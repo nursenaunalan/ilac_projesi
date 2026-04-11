@@ -163,14 +163,36 @@ def analyze_drug_llm(drug_name: str, active_ingredient: str, web_info: str) -> s
 def generate_pdf_report(drug_name: str, analysis_text: str) -> bytes:
     pdf = FPDF()
     pdf.add_page()
-    pdf.set_font("Helvetica", "B", 16)
-    pdf.cell(0, 10, f"Analiz Raporu: {drug_name}", ln=True, align="C")
-    pdf.set_font("Helvetica", "", 10)
-    pdf.cell(0, 10, f"Tarih: {datetime.now().strftime('%d.%m.%Y')}", ln=True, align="C")
+    
+    font_path = "arial.ttf"
+    font_bold_path = "arialbd.ttf"
+    
+    if os.path.exists(font_path) and os.path.exists(font_bold_path):
+        pdf.add_font("ArialCustom", "", font_path)
+        # Bazen bold varyasyon eklendiğinde FPDF style='B' algılar
+        pdf.add_font("ArialCustom", "B", font_bold_path)
+        font_family = "ArialCustom"
+    else:
+        font_family = "Helvetica"
+        
+    pdf.set_font(font_family, "B", 16)
+    
+    # Geleneksel font ise latin-1 dönüşümü, TTF özel font ise orijinal unicode bırak
+    def safe_text(txt):
+        if font_family == "ArialCustom":
+            return txt
+        return txt.encode('latin-1', 'replace').decode('latin-1')
+
+    pdf.cell(0, 10, safe_text(f"Analiz Raporu: {drug_name}"), ln=True, align="C")
+    
+    pdf.set_font(font_family, "", 10)
+    pdf.cell(0, 10, safe_text(f"Tarih: {datetime.now().strftime('%d.%m.%Y')}"), ln=True, align="C")
     pdf.ln(5)
-    pdf.set_font("Helvetica", "", 12)
+    
+    pdf.set_font(font_family, "", 12)
     clean_text = analysis_text.replace("#", "").replace("*", "")
-    pdf.multi_cell(0, 7, clean_text.encode('latin-1', 'replace').decode('latin-1'))
+    pdf.multi_cell(0, 7, safe_text(clean_text))
+    
     return bytes(pdf.output())
 
 # ── UI MANTIĞI ─────────────────────────────────────────────────────────────
